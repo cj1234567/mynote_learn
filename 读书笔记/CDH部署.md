@@ -1,15 +1,15 @@
-#Centos7+CDH5.7.2集群搭建
+# Centos7+CDH5.7.2集群搭建
 
 
-##一、前期准备
+## 一、前期准备
 
-#####1、虚拟机配置（本例为3节点）
+##### 1、虚拟机配置（本例为3节点）
 
  主节点：8g内存、硬盘120g
  
  从节点：2g内存、硬盘120g
  
-#####2、软件资源
+##### 2、软件资源
 
 	1.JDK
 	2.Scala
@@ -31,7 +31,7 @@
 * [CDH安装相关包](https://pan.baidu.com/s/151l8w2Jl8AwhKdIuNTjgyg)
 提取码：gpi1 
 
-#####3、集群的规划
+##### 3、集群的规划
 
 | IP地址        | 主机名 | 说明        |
 |:-------:|:------------- | :----------|
@@ -42,16 +42,16 @@
 ---
 
 
-##二、开始安装前配置和预装软件
+## 二、开始安装前配置和预装软件
 
 
-###1、服务器配置
+### 1、服务器配置
 
 每台节点服务器的有关配置，包括网络，IP、hostname、selinux，防火墙，DNS等。
 
 **在虚拟机安装centos7时选择compute node配置即可**
 
-####1.1 设置本地虚拟机网络的连接模式及网关
+#### 1.1 设置本地虚拟机网络的连接模式及网关
 
 用于集群节点之前的通信及外网访问
 
@@ -61,7 +61,7 @@
 ![name](assets/CDH/虚拟机3.png)
 ![name](assets/CDH/虚拟机4.png)
 
-####1.2 节点的IP配置
+#### 1.2 节点的IP配置
 
 * 配置网络IP地址文件
 
@@ -94,7 +94,7 @@ ifconfig
 
 * 三个服务器节点改下IP地址，其他相同配置。
 
-####1.3 hostname修改
+#### 1.3 hostname修改
 
 下以节点cdh01为例，其他如下配置改下hostname
 此处修改完成需要重启才能生效
@@ -107,7 +107,7 @@ NETWORKING=yes
 HOSTNAME=cdh01
 ```
 
-####1.4．关闭防火墙
+#### 1.4．关闭防火墙
 
 ```
 #查看防火墙状态
@@ -118,7 +118,7 @@ systemctl stop firewalld
 systemctl disable firewalld 
 ```
 
-####1.5 selinux关闭
+#### 1.5 selinux关闭
 
 ```
 vi /etc/sysconfig/selinux
@@ -134,7 +134,7 @@ sestatus -v
 SELinux status: disabled #表示已经关闭了。
 ```
 
-####1.6 免密登录配置
+#### 1.6 免密登录配置
 安装过程中master需要各个节点的root免登录密码，先在master上生成公钥：(在每个节点顺序执行以下命令)
 
 	ssh-keygen
@@ -142,7 +142,7 @@ SELinux status: disabled #表示已经关闭了。
 	ssh-copy-id root@192.168.75.42
 	ssh-copy-id root@192.168.75.43
 
-####1.7 ip和主机名映射关系
+#### 1.7 ip和主机名映射关系
 
 	vi /etc/hosts
 	#内容如下
@@ -155,7 +155,7 @@ SELinux status: disabled #表示已经关闭了。
 
 	scp /etc/hosts root@192.168.75.42:/etc/hosts
 
-####1.8 NTP服务器设置(可选，节点较少，节点时间偏差不大（5分钟内）可不配置)
+#### 1.8 NTP服务器设置(可选，节点较少，节点时间偏差不大（5分钟内）可不配置)
 节点时间同步配置
 
 	所有节点都需安装
@@ -177,9 +177,9 @@ SELinux status: disabled #表示已经关闭了。
 
 	如上图，可以看到offset和jitter都有对应的值，remote中带星号（*）的为ntp挡圈选中的授时服务点，LOCAL表示本机，所以可以看到当前选择的授时服务点即为本机。
 	
-###2、第三方依赖包
+### 2、第三方依赖包
 
-####2.1 其他依赖
+#### 2.1 其他依赖
 
 所有节点执行
 
@@ -189,7 +189,7 @@ yum install chkconfig python bind-utils psmisc libxslt zlib sqlite fuse fuse-lib
 
 ```
 
-####2.2 MySQL connector jar包
+#### 2.2 MySQL connector jar包
 
 这个环节只需要在主节点上进行即可。
 
@@ -198,7 +198,7 @@ yum install chkconfig python bind-utils psmisc libxslt zlib sqlite fuse fuse-lib
     2.修改jar包的名字，并拷贝到/usr/share/java/目录：
 	cp mysql-connector-java-5.1.38-bin.jar /usr/share/java/mysql-connector-java.jar
 
-####2.3 安装jdk
+#### 2.3 安装jdk
 
 这个是所有服务的基础，每个节点都需要安装。
 
@@ -238,7 +238,7 @@ yum install chkconfig python bind-utils psmisc libxslt zlib sqlite fuse fuse-lib
 	ln -s /home/software/jdk1.8 /usr/java/default
 	注：CDH平台安装的时候默认寻找的jdk路径为/usr/java。
 
-####2.4 安装Scala
+#### 2.4 安装Scala
 
 这个是spark服务的基础，每个节点都需要安装。
 
@@ -251,7 +251,7 @@ yum install chkconfig python bind-utils psmisc libxslt zlib sqlite fuse fuse-lib
 	export SCALA_HOME=/usr/scala/scala-2.12.8
 	export PATH=$PATH:$SCALA_HOME/bin
 
-####2.5 安装mysql
+#### 2.5 安装mysql
 	
 MySQL的安装只需要在主节点进行即可。
 	
@@ -284,7 +284,7 @@ MySQL的安装只需要在主节点进行即可。
 			root
 			#查看mysql的安装运行路径，命令如下：
 			ps -ef|grep mysql
-####2.6 MySQL相关问题
+#### 2.6 MySQL相关问题
 * Q .mysql\_secret文件不存在或者.mysql\_secret中的密码无法登陆？
 
   A:使用无需验证的方式，配置方法如下
@@ -419,7 +419,7 @@ MySQL的安装只需要在主节点进行即可。
 
 上传到所有的服务器上，在所有的服务器上执行以下操作。
 
-####3.1 安装CM
+#### 3.1 安装CM
 解压cm tar包到指定目录，先创建目录，命令操作如下：
 
 	[root@cdh01 ~]mkdir /opt/cloudera-manager
@@ -432,7 +432,7 @@ MySQL的安装只需要在主节点进行即可。
 	#查看
 	[root@cdh01 ~]id cloudera-scm
 
-####3.2 配置
+#### 3.2 配置
 *	1．配置从节点的老大
 
 	配置从节点cloudera-manger-agent指向主节点服务器，我现在的集群规划，是需要在每台服务器上都进行如下配置：
@@ -485,7 +485,7 @@ MySQL的安装只需要在主节点进行即可。
     
 	![name](assets/CDH/cm1.png)
 
-####3.3、启动服务
+#### 3.3、启动服务
 
 * 1．启动server
 	   
@@ -512,8 +512,8 @@ MySQL的安装只需要在主节点进行即可。
 ***
 
 
-###四、服务安装
-####1、web登录
+### 四、服务安装
+#### 1、web登录
 
 在浏览器中输入192.168.75.41:7180。
 
@@ -524,7 +524,7 @@ MySQL的安装只需要在主节点进行即可。
 
 出现这个界面说明CM已经安装成功了，下面就在这个web界面中部署各种服务了。
 
-####2、web引导安装
+#### 2、web引导安装
 
 * 1.选择express版本
   当登录之后，会进入选择express版本的界面，在此界面选择免费即可，然后继续。
