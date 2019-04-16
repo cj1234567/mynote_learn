@@ -1,16 +1,16 @@
-#服务器三大体系
+# 服务器三大体系
 从系统架构来看，目前的商用服务器大体可以分为三类
 
 - 对称多处理器结构(SMP：Symmetric Multi-Processor)
 - 非一致存储访问结构(NUMA：Non-Uniform Memory Access)
 - 以及海量并行处理结构(MPP：Massive Parallel Processing)
 
-##SMP
+## SMP
 定义：所谓对称多处理器结构，是指服务器中多个CPU对称工作，无主次或从属关系。各CPU共享相同的物理内存，每个 CPU访问内存中的任何地址所需时间是相同的，因此SMP也被称为一致存储器访问结构(UMA：Uniform Memory Access)。
 
 SMP服务器CPU利用率最好的情况是2至4个CPU。
 
-##NUMA
+## NUMA
 
 定义：NUMA服务器的基本特征是具有多个CPU模块，每个CPU模块由多个CPU(如4个)组成，并且具有独立的本地内存、I/O槽口等。由于其节点之间可以通过互联模块(如称为Crossbar Switch)进行连接和信息交互，因此每个CPU可以访问整个系统的内存(这是NUMA系统与MPP系统的重要差别)。显然，访问本地内存的速度将远远高于访问远地内存(系统内其它节点的内存)的速度，这也是非一致存储访问NUMA的由来。
 
@@ -20,18 +20,18 @@ NUMA技术同样有一定缺陷，由于访问远地内存的延时远远超过�
 
 ![tool-manager](assets/mpp/mpp1.gif)
 
-##MPP
+## MPP
 
 其基本特征是由多个SMP服务器(每个SMP服务器称节点)通过节点互联网络连接而成，每个节点只访问自己的本地资源(内存、存储等)，是一种完全无共享(Share Nothing)结构，因而扩展能力最好，理论上其扩展无限制，目前的技术可实现512个节点互联，数千个CPU。
 
-##MPP架构的产品
+## MPP架构的产品
 
 阿里云的ADS、
 Presto、Impala、
 elasticsearch、
 Teradata
 
-##MPP和hadoop
+## MPP和hadoop
 
 |比较项目|MPP|Hadoop|
 |---|---|---|
