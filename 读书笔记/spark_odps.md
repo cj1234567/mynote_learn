@@ -1,4 +1,4 @@
-###1.提交任务命令格式
+### 1.提交任务命令格式
 
 ```
 bin/spark-submit --master yarn-cluster --jars /Users/zhuyun/.m2/repository/com/aliyun/odps/odps-spark-datasource_2.11/3.3.2-public/odps-spark-datasource_2.11-3.3.2-public.jar --class com.zhuyun.maxcompute.sparkReader ~/Desktop/Project/spark/target/spark-1.0-SNAPSHOT.jar 
@@ -6,7 +6,7 @@ bin/spark-submit --master yarn-cluster --jars /Users/zhuyun/.m2/repository/com/a
 
 
 
-###2.RDD的定义
+### 2.RDD的定义
 
 RDD（Resilient Distributed Dataset）是弹性分布式数据集，它代表一个不可变、可分区、
 里面的元素可并行计算的集合。
@@ -18,7 +18,7 @@ RDD具有数据流模型的特点：
 ✨位置感知性调度
 
 ✨可伸缩性
-###3.RDD的两种操作类型
+### 3.RDD的两种操作类型
 
 转换（Transformation）：将一个已有的RDD生成另外一个RDD。
 Transformation具有lazy特性(延迟加载)。Transformation算子的代码不会真正被执行。只有
@@ -80,7 +80,7 @@ lineage（血统）来重新计算生成丢失的分区数据。
 
 执行（action）：触发代码的运行，一段spark代码里面至少需要有一个action操作。
 
-###4.RDD的属性
+### 4.RDD的属性
 
 （1）一组分片（Partition），即数据集的基本组成单位。对于RDD来说，每个分片都会被一个计算任务处理，并决定并行计算的粒度。用户可以在创建RDD时指定RDD的分片个数，如果没有指定，那么就会采用默认值。默认值就是程序所分配到的CPU Core的数目。
 
@@ -96,8 +96,8 @@ RDD，才会有Partitioner，非key-value的RDD的Parititioner的值是None。Pa
 （5）一个列表，存储存取每个Partition的优先位置（preferred location）。对于一个HDFS文件来说，这个列表保存的就是每个Partition所在的块的位置。按照“移动数据不如移动计算”的理念，Spark在进行任务调度的时候，会尽可能地将计算任务分配到其所要处理数据块的存储位置。
 
 
-###5.RDD的创建方式
-####5.1 使用程序中的集合创建RDD
+### 5.RDD的创建方式
+#### 5.1 使用程序中的集合创建RDD
 ```
 scala> val seq = List(("American Person", List("Tom", "Jim")), ("China Person", List("LiLei", "HanMeiMei")), ("Color Type", List("Red", "Blue")))
 
@@ -114,7 +114,7 @@ scala> rdd2.partitions.size  // 3
 第二种makerdd还提供了计算位置
 
 ```
-####5.2 通过读取本地文件系统创建
+#### 5.2 通过读取本地文件系统创建
 
 文件（外部存储系统的数据集创建）来源有：
 
@@ -126,18 +126,18 @@ scala> rdd2.partitions.size  // 3
 scala> val file = sc.textFile("/spark/hello.txt")
 ```
 
-####5.3 使用HDFS创建RDD
-####5.4 使用数据流创建RDD
+#### 5.3 使用HDFS创建RDD
+#### 5.4 使用数据流创建RDD
 ![tool-manager](assets/spark/spark读取.png)
 ![tool-manager](assets/spark/spark读取2.png)
-####5.5 从其他数据库（HBASE，Hive，Mysql）创建RDD
+#### 5.5 从其他数据库（HBASE，Hive，Mysql）创建RDD
 
-###6. DataFrame
+### 6. DataFrame
 DataFrame是一个分布式集合，其中数据被组织为命名的列。它概念上等价于关系数据库中的表，但底层做了更多的优化。DataFrame可以从很多数据源构建，比如：已经存在的RDD、结构化文件、外部数据库、Hive表。
 
 **DataFrame是一个一个Row类型的RDD**
 
-####6.1 通过读取json格式的文件创建DataFrame
+#### 6.1 通过读取json格式的文件创建DataFrame
 缺点：json格式文件嵌套不能过复杂
 
 ```
@@ -146,7 +146,7 @@ scala> val df = sqlContext.read.json("sparksql/json")
 scala> val df1 = sqlContext.read.format("json").load("sparksql/json")
 
 ```
-####6.2 通过json格式的RDD创建DataFrame
+#### 6.2 通过json格式的RDD创建DataFrame
 
 ```
 scala> val nameRDD = sc.makeRDD(Array(
@@ -165,8 +165,8 @@ scala> val scoreDF = sqlContext.read.json(scoreRDD)
 
 ```
 
-####6.3 非json格式的RDD创建DataFrame（重要）
-#####6.3.1 通过反射的方式将非json格式的RDD转换成DataFrame
+#### 6.3 非json格式的RDD创建DataFrame（重要）
+##### 6.3.1 通过反射的方式将非json格式的RDD转换成DataFrame
 ***1.自定义类要可序列化***
 
 ***2.自定义类的访问级别是Public***
@@ -219,7 +219,7 @@ Person(x.getAs("id"),x.getAs("name"),x.getAs("age"))
 
 
 ```
-#####6.3.2 动态创建Schema将非json格式的RDD转换成DataFrame（建议使用）
+##### 6.3.2 动态创建Schema将非json格式的RDD转换成DataFrame（建议使用）
 
 
 ```
@@ -238,7 +238,7 @@ scala> val schema = StructType(List(
 scala> val df = sqlContext.createDataFrame(rowRDD, schema)
 ```
 
-#####6.3.3 读取parquet文件创建DataFrame
+##### 6.3.3 读取parquet文件创建DataFrame
 
 ```
 /**
@@ -255,7 +255,7 @@ df.write.mode(SaveMode.Overwrite).format("parquet").save("./sparksql/parquet")
  sc.stop()
 
 ```
-#####6.3.4 读取JDBC中的数据创建DataFrame(MySql为例)
+##### 6.3.4 读取JDBC中的数据创建DataFrame(MySql为例)
 
 ```
 /**
@@ -293,14 +293,14 @@ properties.setProperty("password", "123456")
 result.write.mode(SaveMode.Append).jdbc("jdbc:mysql://192.168.179.4:3306/spark", "result", properties)
 ```
 
-###7. DataSet
+### 7. DataSet
 Dataset是分布式数据集合。Dataset是Spark1.6.0中添加的一个新接口，既提供了RDD的优点(强类型，支持lambda表达式)，又提供了Spark SQL优化执行引擎的优点。Dataset API仅可用于Scala和Java，Python不支持Dataset API。
-###8. Dataset和DataFrame
+### 8. Dataset和DataFrame
 DataFrame可以从各种来源构建，如结构化数据文件，Hive中的表，外部数据库或者现有的RDD。DataFrame API适用于Scala，Java，Python和R。在Scala和Java中，DataFrame is represented by a Dataset of Rows。在Scala API中，DataFrame is simply a type alias of Datasets[Row]。在Java API中，DataFrame被表示成Dataset\<Row\>。
 
-###9.Scala中集合数组
+### 9.Scala中集合数组
 [Scala在常用的集合的类别有数组，List，Set，Map，元组。](https://www.cnblogs.com/LHWorldBlog/p/8396789.html)
-####9.1 元组
+#### 9.1 元组
 
 ***元组的定义***
 
@@ -362,7 +362,7 @@ tuple.productIterator得到迭代器，进而遍历
 
 ```
 
-####9.2 map集合
+#### 9.2 map集合
 
 ***创建map***
 
