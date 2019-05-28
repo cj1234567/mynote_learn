@@ -217,7 +217,7 @@
 
 
 
-#HBASE数据存储模型
+# HBASE数据存储模型
 
 >HBase数据存储结构中主要包括：表、行、列族、列限定符、单元格和时间戳
 
@@ -238,7 +238,7 @@
 
 - 时间戳： 时间戳是给定值的一个版本号标识，每一个值都会对应一个时间戳，时间戳是和每一个值同时写入HBase存储系统中的。在默认情况下，时间戳表示数据服务在写入数据时的时间，但可以在将数据放入单元格时指定不同的时间戳值。
 
-##表的组织结构
+## 表的组织结构
 
 ![tool-manager](assets/hbase/HBASE数据模型1.png)
 
@@ -272,4 +272,260 @@
 - 列限定符和列族名字的长度都会影响I/O的读写性能和发送给客户端的数据量，所以给它们命名的时候应该尽量简短！
 
 
+## HBASE操作命令
 
+### 进入shell
+
+		hbase shell
+		
+		创建命名空间
+		create_namespace 'database'
+### 表结构
+1. 创建表
+
+		语法 ：create <table>, {NAME => <family>, VERSIONS => <VERSIONS>}
+		
+		hbase(main):002:0> create 'User','info'
+		0 row(s) in 1.5890 seconds
+
+		=> Hbase::Table - User
+		创建表两个列族
+		create 'database:somebody',  {NAME=>'personal'},{NAME=>'office'}
+
+2. 查看所有表
+
+		hbase(main):003:0> list
+		TABLE
+		SYSTEM.CATALOG
+		SYSTEM.FUNCTION
+		SYSTEM.SEQUENCE
+		SYSTEM.STATS
+		TEST.USER
+		User
+		6 row(s) in 0.0340 seconds
+
+		=> ["SYSTEM.CATALOG", "SYSTEM.FUNCTION", "SYSTEM.SEQUENCE", "SYSTEM.STATS", "TEST.USER", "User"]
+
+3. 查看表详情
+
+		hbase(main):004:0> describe 'User'
+		Table User is ENABLED
+		User
+		COLUMN FAMILIES DESCRIPTION
+		{NAME => 'info', BLOOMFILTER => 'ROW', VERSIONS => '1', IN_MEMORY => 'false', KEEP_DELETED_CELLS => 'FALSE', DATA_BLOCK_ENCODING => 'NONE', TTL => 'FORE
+		VER', COMPRESSION => 'NONE', MIN_VERSIONS => '0', BLOCKCACHE => 'true', BLOCKSIZE => '65536', REPLICATION_SCOPE => '0'}
+		1 row(s) in 0.1410 seconds
+
+		hbase(main):025:0> desc 'User'
+		Table User is ENABLED
+		User
+		COLUMN FAMILIES DESCRIPTION
+		{NAME => 'info', BLOOMFILTER => 'ROW', VERSIONS => '1', IN_MEMORY => 'false', KEEP_DELETED_CELLS => 'FALSE', DATA_BLOCK_ENCODING => 'NONE', TTL => 'FORE
+		VER', COMPRESSION => 'NONE', MIN_VERSIONS => '0', BLOCKCACHE => 'true', BLOCKSIZE => '65536', REPLICATION_SCOPE => '0'}
+		1 row(s) in 0.0380 seconds
+		
+4. 表修改
+
+	删除指定的列族
+	
+		hbase(main):002:0> alter 'User', 'delete' => 'info'
+		Updating all regions with the new schema...
+		1/1 regions updated.
+		Done.
+		0 row(s) in 2.5340 seconds
+
+### 表数据
+
+1. 插入数据
+
+
+	在向HBase的表中添加数据的时候，只能一列一列的添加，不能同时添加多列
+
+		语法：put <table>,<rowkey>,<family:column>,<value>
+		hbase(main):005:0> put 'User', 'row1', 'info:name', 'xiaoming'
+		0 row(s) in 0.1200 seconds
+
+		hbase(main):006:0> put 'User', 'row2', 'info:age', '18'
+		0 row(s) in 0.0170 seconds
+
+		hbase(main):007:0> put 'User', 'row3', 'info:sex', 'man'
+		0 row(s) in 0.0030 seconds
+		
+		put 'database:somebody','c-10001','personal:name','张三'
+		put 'database:somebody','c-10001','personal:mobilephone','15111111111'
+		put 'database:somebody','c-10001','office:phone','010-66171111'
+		put 'database:somebody','c-10001','office:address','帝都大厦 201-1'
+		
+		put 'database:somebody','c-10002','personal:name','李四'
+		put 'database:somebody','c-10002','personal:mobilephone','15111111112'
+		put 'database:somebody','c-10002','office:phone','010-66171112'
+		put 'database:somebody','c-10002','office:address','帝都大厦 201-2'
+		
+2. 根据rowKey查询某个记录
+
+		语法：get <table>,<rowkey>,[<family:column>,....]
+		
+		hbase(main):008:0> get 'User', 'row2'
+		COLUMN                                  CELL
+		info:age                               timestamp=1502368069926, value=18
+		1 row(s) in 0.0280 seconds
+		hbase(main):028:0> get 'User', 'row3', 'info:sex'
+		COLUMN                                  CELL
+		info:sex                               timestamp=1502368093636, value=man
+
+		hbase(main):036:0> get 'User', 'row1', {COLUMN => 'info:name'}
+		COLUMN                                  CELL
+		info:name                              timestamp=1502368030841, value=xiaoming
+		1 row(s) in 0.0120 seconds
+		
+		get 'database:somebody','c-10002',['personal:name','personal:mobilephone']
+		
+3. 查询所有记录
+
+		语法：scan <table>, {COLUMNS => [ <family:column>,.... ], LIMIT => num}
+扫描所有记录
+
+		hbase(main):009:0> scan 'User'
+		ROW                                     COLUMN+CELL
+		row1                                   column=info:name, timestamp=1502368030841, value=xiaoming
+		row2                                   column=info:age, timestamp=1502368069926, value=18
+		row3                                   column=info:sex, timestamp=1502368093636, value=man
+		3 row(s) in 0.0380 seconds
+		
+	扫描前2条
+
+		hbase(main):037:0> scan 'User', {LIMIT => 2}
+		ROW                                     COLUMN+CELL
+		row1                                   column=info:name, timestamp=1502368030841, value=xiaoming
+		row2                                   column=info:age, timestamp=1502368069926, value=18
+		2 row(s) in 0.0170 seconds
+		
+	范围查询
+	
+	STARTROW,ENDROW必须大写，否则报错;查询结果不包含等于ENDROW的结果集
+
+	
+		hbase(main):011:0> scan 'User', {STARTROW => 'row2'}
+		ROW                                     COLUMN+CELL
+		row2                                   column=info:age, timestamp=1502368069926, value=18
+		row3                                   column=info:sex, timestamp=1502368093636, value=man
+		2 row(s) in 0.0170 seconds
+		hbase(main):012:0> scan 'User', {STARTROW => 'row2', ENDROW => 'row2'}
+		ROW                                     COLUMN+CELL
+		row2                                   column=info:age, timestamp=1502368069926, value=18
+		1 row(s) in 0.0110 seconds
+
+		hbase(main):013:0> scan 'User', {STARTROW => 'row2', ENDROW => 'row3'}
+		ROW                                     COLUMN+CELL
+		row2                                   column=info:age, timestamp=1502368069926, value=18
+		1 row(s) in 0.0120 seconds
+
+4. 统计表记录数
+
+		语法：count <table>, {INTERVAL => intervalNum, CACHE => cacheNum}
+
+		hbase(main):020:0> count 'User'
+		3 row(s) in 0.0360 seconds
+
+		=> 3
+		
+5. 删除
+
+	删除列
+	
+		hbase(main):008:0> delete 'User', 'row1', 'info:age'
+		0 row(s) in 0.0290 seconds
+
+	删除所有行
+	
+		hbase(main):014:0> deleteall 'User', 'row2'
+		0 row(s) in 0.0090 seconds
+		
+	删除表中所有数据
+	
+		hbase(main):016:0> truncate 'User'
+		Truncating 'User' table (it may take a while):
+		- Disabling table...
+		- Truncating table...
+		0 row(s) in 3.6610 seconds
+		
+
+### 表管理
+
+1. 禁用表
+
+		hbase(main):014:0> disable 'User'
+		0 row(s) in 2.2660 seconds
+		hbase(main):015:0> describe 'User'
+		Table User is DISABLED
+		User
+		COLUMN FAMILIES DESCRIPTION
+		{NAME => 'info', BLOOMFILTER => 'ROW', VERSIONS => '1', IN_MEMORY => 'false', KEEP_DELETED_CELLS => 'FALSE', DATA_BLOCK_ENCODING => 'NONE', TTL => 'FORE
+		VER', COMPRESSION => 'NONE', MIN_VERSIONS => '0', BLOCKCACHE => 'true', BLOCKSIZE => '65536', REPLICATION_SCOPE => '0'}
+		1 row(s) in 0.0340 seconds
+
+		hbase(main):016:0> scan 'User', {STARTROW => 'row2', ENDROW => 'row3'}
+		ROW                                     COLUMN+CELL
+
+		ERROR: User is disabled.
+		
+2. 启用表
+
+		hbase(main):017:0> enable 'User'
+		0 row(s) in 1.3470 seconds
+
+		hbase(main):018:0> describe 'User'
+		Table User is ENABLED
+		User
+		COLUMN FAMILIES DESCRIPTION
+		{NAME => 'info', BLOOMFILTER => 'ROW', VERSIONS => '1', IN_MEMORY => 'false', KEEP_DELETED_CELLS => 'FALSE', DATA_BLOCK_ENCODING => 'NONE', TTL => 'FORE
+		VER', COMPRESSION => 'NONE', MIN_VERSIONS => '0', BLOCKCACHE => 'true', BLOCKSIZE => '65536', REPLICATION_SCOPE => '0'}
+		1 row(s) in 0.0310 seconds
+
+		hbase(main):019:0> scan 'User', {STARTROW => 'row2', ENDROW => 'row3'}
+		ROW                                     COLUMN+CELL
+		row2                                   column=info:age, timestamp=1502368069926, value=18
+		1 row(s) in 0.0280 seconds
+
+3. 测试表是否存在
+
+		hbase(main):022:0> exists 'User'
+		Table User does exist
+		0 row(s) in 0.0150 seconds
+
+		hbase(main):023:0> exists 'user'
+		Table user does not exist
+		0 row(s) in 0.0110 seconds
+
+		hbase(main):024:0> exists user
+		NameError: undefined local variable or method `user' for #<Object:0x412ebe64>
+		
+4. 删除表
+
+	删除前，必须先disable
+
+		hbase(main):030:0> drop 'TEST.USER'
+
+		ERROR: Table TEST.USER is enabled. Disable it first.
+
+		Here is some help for this command:
+		Drop the named table. Table must first be disabled:
+		hbase> drop 't1'
+		hbase> drop 'ns1:t1'
+
+		hbase(main):031:0> disable 'TEST.USER'
+		0 row(s) in 2.2640 seconds
+
+		hbase(main):033:0> drop 'TEST.USER'
+		0 row(s) in 1.2490 seconds
+
+		hbase(main):034:0> list
+		TABLE
+		SYSTEM.CATALOG
+		SYSTEM.FUNCTION
+		SYSTEM.SEQUENCE
+		SYSTEM.STATS
+		User
+		5 row(s) in 0.0080 seconds
+
+		=> ["SYSTEM.CATALOG", "SYSTEM.FUNCTION", "SYSTEM.SEQUENCE", "SYSTEM.STATS", "User"]
