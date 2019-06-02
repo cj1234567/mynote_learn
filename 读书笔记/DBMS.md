@@ -364,10 +364,14 @@ E-R模型即实体-联系模型，E-R模型的提出基于这样一种认识，�
 	
 # mysql
 
-![tool-manager](assets/数据库概念/mysql1.png)
+![tool-manager](assets/数据库概念/mysql0.png)
+
+
+
 	
 	
 大体来说，MySQL 可以分为 Server 层和存储引擎层两部分。
+![tool-manager](assets/数据库概念/mysql1.png)
 
 Server 层包括连接器、查询缓存、分析器、优化器、执行器等，涵盖 MySQL 的大多数核心服务功
 能，以及所有的内置函数（如日期、时间、数学和加密函数等），所有跨存储引擎的功能都在这一
@@ -837,3 +841,138 @@ B+树存储结构：（略去指针位）
 2. 该索引必须是唯一索引。
 
 你一定看出来了，这就是典型的 KV 场景。
+
+### 索引类型
+
+#### 1.主键索引
+主键索引是一种特殊的唯一索引，一个表只能有一个主键，不允许有空值。一般是在建表的时候同时创建主键索引
+
+	1）主键索引(创建表时添加)
+
+	CREATE TABLE `news` (
+    `id` int(11) NOT NULL AUTO_INCREMENT ,
+    `title` varchar(255)  NOT NULL ,
+    `content` varchar(255)  NULL ,
+    `time` varchar(20) NULL DEFAULT NULL ,
+    PRIMARY KEY (`id`))
+
+
+	2）主键索引(创建表后添加)
+	alter table tbl_name add primary key(col_name);
+
+	CREATE TABLE `order` (
+    `orderId` varchar(36) NOT NULL,
+    `productId` varchar(36)  NOT NULL ,
+    `time` varchar(20) NULL DEFAULT NULL)
+
+	alter table `order` add primary key(`orderId`);
+
+
+
+#### 2.普通索引
+单列索引是最基本的索引，它没有任何限制。
+	
+	1）直接创建索引
+	CREATE INDEX index_name ON table_name(col_name);
+		
+	2）修改表结构的方式添加索引
+	ALTER TABLE table_name ADD INDEX index_name(col_name);
+
+
+	3）创建表的时候同时创建索引
+	CREATE TABLE `news` (
+    `id` int(11) NOT NULL AUTO_INCREMENT ,
+    `title` varchar(255)  NOT NULL ,
+    `content` varchar(255)  NULL ,
+    `time` varchar(20) NULL DEFAULT NULL ,
+    PRIMARY KEY (`id`),
+    INDEX index_name (title(255)))
+
+
+	4）删除索引
+	DROP INDEX index_name ON table_name;
+	或者
+	alter table `表名` drop index 索引名;
+
+
+#### 3.唯一索引
+唯一索引和普通索引类似，主要的区别在于，唯一索引限制列的值必须唯一，但允许存在空值（只允许存在一条空值）
+
+	1）创建唯一索引
+	创建单个索引
+	CREATE UNIQUE INDEX index_name ON table_name(col_name);
+
+	创建多个索引
+	CREATE UNIQUE INDEX index_name on table_name(col_name,...);
+
+
+	2）修改表结构
+	单个
+	ALTER TABLE table_name ADD UNIQUE index index_name(col_name);
+	多个
+	ALTER TABLE table_name ADD UNIQUE index index_name(col_name,...);
+
+	3）创建表的时候直接指定索引
+	CREATE TABLE `news` (
+    `id` int(11) NOT NULL AUTO_INCREMENT ,
+    `title` varchar(255)  NOT NULL ,
+    `content` varchar(255)  NULL ,
+    `time` varchar(20) NULL DEFAULT NULL ,
+    PRIMARY KEY (`id`),
+    UNIQUE index_name_unique(title))
+
+
+#### 4.联合索引
+复合索引是在多个字段上创建的索引，遵循最左前缀原则
+
+	1）创建一个复合索引
+	create index index_name on table_name(col_name1,col_name2,...);
+
+	2）修改表结构的方式添加索引
+	alter table table_name add index index_name(col_name,col_name2,...);
+
+#### 5.全文索引
+	全文搜索在 MySQL 中是一个 FULLTEXT 类型索引
+	
+	1）创建表的适合添加全文索引
+	CREATE TABLE `news` (
+    `id` int(11) NOT NULL AUTO_INCREMENT ,
+    `title` varchar(255)  NOT NULL ,
+    `content` text  NOT NULL ,
+    `time` varchar(20) NULL DEFAULT NULL ,
+     PRIMARY KEY (`id`),
+    FULLTEXT (content))
+
+
+	2）修改表结构添加全文索引
+	ALTER TABLE table_name ADD FULLTEXT index_fulltext_content(col_name)
+
+
+	3）直接创建索引
+	CREATE FULLTEXT INDEX index_fulltext_content ON table_name(col_name)
+
+### 索引的查询和删除
+
+	查看:
+	show indexes from `表名`;
+	或
+	show keys from `表名`;
+ 
+	删除
+	alter table `表名` drop index 索引名;
+
+### 索引优化手段
+
+>回表:回到主键索引树搜索的过程
+
+1）覆盖索引
+
+覆盖了查询需求的索引
+
+2）最左前缀原则
+
+即在查询条件中使用了复合索引的第一个字段，索引才会被使用
+		
+3）索引下推
+
+在索引遍历过程中，对索引中包含的字段先做判断，直接过滤掉不满足条件的记录，减少回表次数
