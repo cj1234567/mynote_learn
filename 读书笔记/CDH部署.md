@@ -305,11 +305,11 @@ MySQL的安装只需要在主节点进行即可。
  ```
 * Q 执行下面这句？
 
-		GRANT ALL PRIVILEGES ON *.* TO IDENTIFIED BY '123' WITH GRANT OPTION;
+		GRANT ALL PRIVILEGES ON *.* TO 'scmdbu'@'%' IDENTIFIED BY 'scmdbp' WITH GRANT OPTION;
 	
 	报错：
 	
-		mysql> GRANT ALL PRIVILEGES ON *.* TO IDENTIFIED BY '123' WITH GRANT OPTION;
+		mysql> GRANT ALL PRIVILEGES ON *.* TO 'scmdbu'@'%' IDENTIFIED BY 'scmdbp' WITH GRANT OPTION;
 	
 		ERROR 1290 (HY000): The MySQL server is running with the --skip-grant-tables option so it cannot execute this statement
 
