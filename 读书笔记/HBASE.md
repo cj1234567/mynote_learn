@@ -219,6 +219,37 @@
 
 # HBASE数据存储模型
 
+
+## rowkey
+
+用来表示唯一一行记录的主键，HBase的数据是按照RowKey的字典顺序进行全局排序的，所有的查询都只能依赖于这一个排序维度。
+## 稀疏矩阵
+每一行中，列的组成都是灵活的，行与行之间并不需要遵循相同的列定义， 也就是HBase数据表"schema-less"的特点。
+![tool-manager](assets/hbase/稀疏矩阵.png)
+## Region
+区别于Cassandra/DynamoDB的"Hash分区"设计，HBase中采用了"Range分区"，将Key的完整区间切割成一个个的"Key Range" ，每一个"Key Range"称之为一个Region。
+
+也可以这么理解：将HBase中拥有数亿行的一个大表，横向切割成一个个"子表"，这一个个"子表"就是Region：
+![tool-manager](assets/hbase/region.png)
+Region是HBase中负载均衡的基本单元，当一个Region增长到一定大小以后，会自动分裂成两个。
+
+## Column Family
+如果将Region看成是一个表的横向切割，那么，一个Region中的数据列的纵向切割，称之为一个Column Family。每一个列，都必须归属于一个Column Family，这个归属关系是在写数据时指定的，而不是建表时预先定义。
+
+![tool-manager](assets/hbase/ColumnFamily.png)
+
+
+
+## KeyValue
+
+KeyValue的设计不是源自Bigtable，而是要追溯至论文"The log-structured merge-tree(LSM-Tree)"。每一行中的每一列数据，都被包装成独立的拥有特定结构的KeyValue，KeyValue中包含了丰富的自我描述信息:
+
+![tool-manager](assets/hbase/keyvalue.png)
+
+看的出来，KeyValue是支撑"稀疏矩阵"设计的一个关键点：一些Key相同的任意数量的独立KeyValue就可以构成一行数据。但这种设计带来的一个显而易见的缺点：每一个KeyValue所携带的自我描述信息，会带来显著的数据膨胀。
+
+
+
 >HBase数据存储结构中主要包括：表、行、列族、列限定符、单元格和时间戳
 
 
@@ -248,6 +279,10 @@
 
 ![tool-manager](assets/hbase/HBASE数据模型2.png)
 
+![tool-manager](assets/hbase/HBASE数据模型4.png)
+
+
+
 如果将HBase表中的数据理解成键值对存储的形式,那么也可以用如图三的形式来理解存储在HBase表中的数据。
 
 
@@ -270,6 +305,9 @@
 
 
 - 列限定符和列族名字的长度都会影响I/O的读写性能和发送给客户端的数据量，所以给它们命名的时候应该尽量简短！
+
+
+
 
 
 ## HBASE操作命令
@@ -529,3 +567,243 @@
 		5 row(s) in 0.0080 seconds
 
 		=> ["SYSTEM.CATALOG", "SYSTEM.FUNCTION", "SYSTEM.SEQUENCE", "SYSTEM.STATS", "User"]
+		
+		
+# 适用场景
+
+>1.什么样的数据适合用HBase来存储？
+
+>2.既然HBase也是一个数据库，能否用它将现有系统中昂贵的Oracle替换掉？
+
+
+HBase的数据模型比较简单，数据按照RowKey排序存放，适合HBase存储的数据，可以简单总结如下：
+
+- 以实体为中心的数据
+
+	实体可以包括但不限于如下几种：
+
+	描述这些实体的，可以有基础属性信息、实体关系(图数据)、所发生的事件(如交易记录、车辆轨迹点)等等。
+
+	- 自然人／账户／手机号／车辆相关数据
+
+	- 用户画像数据（含标签类数据）
+
+	- 图数据（关系类数据）
+
+
+
+- 以事件为中心的数据
+
+	- 监控数据
+
+	- 时序数据
+
+	- 实时位置类数据
+
+	- 消息/日志类数据
+
+
+上面所描述的这些数据，有的是结构化数据，有的是半结构化或非结构化数据。HBase的“稀疏矩阵”设计，使其应对非结构化数据存储时能够得心应手，但在我们的实际用户场景中，结构化数据存储依然占据了比较重的比例。由于HBase仅提供了基于RowKey的单维度索引能力，在应对一些具体的场景时，依然还需要基于HBase之上构建一些专业的能力，如：
+
+- OpenTSDB 时序数据存储，提供基于Metrics+时间+标签的一些组合维度查询与聚合能力
+
+- GeoMesa 时空数据存储，提供基于时间+空间范围的索引能力
+
+- JanusGraph 图数据存储，提供基于属性、关系的图索引能力
+
+HBase擅长于存储结构简单的海量数据但索引能力有限，而Oracle等传统关系型数据库(RDBMS)能够提供丰富的查询能力，但却疲于应对TB级别的海量数据存储，HBase对传统的RDBMS并不是取代关系，而是一种补充。
+
+
+
+# 结构化数据 非结构化数据 半结构化数据
+- 结构化数据可以通过固有键值获取相应信息，且数据的格式固定，如RDBMS data
+- 半结构化数据可以通过灵活的键值调整获取相应信息，且数据的格式不固定，如json，同一键值下存储的信息可能是数值型的，可能是文本型的，也可能是字典或者列表
+- 非结构化数据不可以通过键值获取相应信息。
+
+
+
+# HBASE和HDFS
+
+>HBase是一个分布式数据库，HDFS是一个分布式文件系统
+
+>1.HBase中的数据为何不直接存放于HDFS之上？
+
+>HBase中存储的海量数据记录，通常在几百Bytes到KB级别，如果将这些数据直接存储于HDFS之上，会导致大量的小文件产生，为HDFS的元数据管理节点(NameNode)带来沉重的压力。
+
+
+
+>2.文件能否直接存储于HBase里面？
+
+>如果是几MB的文件，其实也可以直接存储于HBase里面，我们暂且将这类文件称之为小文件，HBase提供了一个名为MOB的特性来应对这类小文件的存储。但如果是更大的文件，强烈不建议用HBase来存储，关于这里更多的原因，希望你在详细读完本系列文章所有内容之后能够自己解答。
+
+
+# 集群角色
+
+>关于集群环境，你可以使用国内外大数据厂商的平台，如Cloudera，Hontonworks以及国内的华为，都发行了自己的企业版大数据平台，另外，华为云、阿里云中也均推出了全托管式的HBase服务。
+
+![tool-manager](assets/hbase/集群角色.png)
+
+
+![tool-manager](assets/hbase/hbase架构1.png)
+
+
+相信大部分人对这些角色都已经有了一定程度的了解，我们快速的介绍一下各个角色在集群中的主要职责：
+
+- ZooKeeper
+
+	在一个拥有多个节点的分布式系统中，假设，只能有一个节点是主节点，如何快速的选举出一个主节点而且让所有的节点都认可这个主节点？这就是HBase集群中存在的一个最基础命题。
+
+	利用ZooKeeper就可以非常简单的实现这类"仲裁"需求，ZooKeeper还提供了基础的事件通知机制，所有的数据都以 ZNode的形式存在，它也称得上是一个"微型数据库"。
+
+- NameNode
+
+	HDFS作为一个分布式文件系统，自然需要文件目录树的元数据信息，另外，在HDFS中每一个文件都是按照Block存储的，文件与Block的关联也通过元数据信息来描述。NameNode提供了这些元数据信息的存储。
+	
+- DataNode
+
+	HDFS的数据存放节点。
+	
+- RegionServer
+
+	HBase的数据服务节点。
+	
+	1. 从图中可以看出，HRegionServer是HBase的数据服务进程，处理⽤用户所有的读写请求
+
+	2. 负责管理Region，处理对Region的IO请求
+
+	3. 负责切分Region，如果Region的大小超出了⼀一定的阀值，那么将其切分为多个
+
+	4. RegionServer推荐管理1000个左右的Region
+
+- Region
+
+	1. Region负责Rowkey数据的存储，在HBase数据表中按照RowKey的范围划为一个的Region，实现分布式的存储，每一个Region都关联一个Rowkey的范围（StartKey-EndKey)(可以参考HBase细节概要篇)
+
+	2. Region是Hbase的最小单元
+
+	3. Region分为Meta Region和User Region，Meta Region纪录了每一个User Region的路由信息，首先读写Region会⾸首先经过路由，1，寻找Meta Region 2，由Meta Region找到User Region
+
+	4. Region由多个Store组成
+
+- Master
+
+	HBase的管理节点，通常在一个集群中设置一个主Master，一个备Master，主备角色的"仲裁"由ZooKeeper实现。 Master主要职责：
+
+	①负责管理所有的RegionServer。
+
+	②建表/修改表/删除表等DDL操作请求的服务端执行主体。
+
+	③管理所有的数据分片(Region)到RegionServer的分配。
+
+	④如果一个RegionServer宕机或进程故障，由Master负责将它原来所负责的Regions转移到其它的RegionServer上继续提供服务。
+
+	⑤Master自身也可以作为一个RegionServer提供服务，该能力是可配置的。
+
+
+
+# 示例数据
+
+字段定义：
+
+| 字段中文名 | 字段定义 |
+| --- | --- |
+|主叫手机号码|MSISDN1|
+|被叫手机号码|MSISDN2|
+|通话开始时间|StartTime|
+|通话时长（单位：秒）|Duration|
+
+
+数据：
+
+|MSISND1|MSISND2|StartTime|Duration|
+| --- | --- |---|---|
+|1340001111|1350001111|201803010800|100|
+|1340002222|1350002222|201803010900|200|
+|1340003333|1350003333|201803011000|1600|
+|1340004444|1350004444|201803011100|1808|
+|1340005555|1350005555|201803011200|500|
+|1340005555|1350006666|201803011300|666|
+
+
+
+# 写数据之前：创建链接
+
+- Login
+在启用了安全特性的前提下，Login阶段是为了完成用户认证(确定用户的合法身份)，这是后续一切安全访问控制的基础。
+
+当前Hadoop/HBase仅支持基于Kerberos的用户认证，ZooKeeper除了Kerberos认证，还能支持简单的用户名/密码认证，但都基于静态的配置，无法动态新增用户。如果要支持其它第三方认证，需要对现有的安全框架做出比较大的改动。
+
+- 创建Connection
+
+Connection可以理解为一个HBase集群连接的抽象，建议使用ConnectionFactory提供的工具方法来创建。因为HBase当前提供了两种连接模式：同步连接，异步连接，这两种连接模式下所创建的Connection也是不同的。我们给出ConnectionFactory中关于获取这两种连接的典型方法定义：
+
+![tool-manager](assets/hbase/创建链接.png)
+
+
+Connection中主要维护着两类共享的资源：
+
+
+
+- 线程池
+
+- Socket连接
+
+
+
+这些资源都是在真正使用的时候才会被创建，因此，此时的连接还只是一个"虚拟连接"。
+
+# 写数据之前：创建表
+
+## DDL操作的抽象接口 - Admin
+
+Admin定义了常规的DDL接口，列举几个典型的接口：
+
+
+![tool-manager](assets/hbase/创建表.png)
+
+## 预设合理的数据分片 - Region
+
+###查看表分区详情
+
+		#初始化hbase客户端
+		hbaseAPI demo=new hbaseAPI("database:phone");
+
+		#获取表分区详情信息
+        List<HRegionInfo> lr = demo.getAdmin().getTableRegions(TableName.valueOf("database:phone"));
+        Iterator<HRegionInfo> ir = lr.iterator();
+
+        Result r = null;
+
+
+        //while (ir.hasNext()) {
+            HRegionInfo regionInfo = ir.next();
+            ResultScanner scanner = null;
+            Long startTime = System.currentTimeMillis();
+
+
+            String regionName=regionInfo.getRegionNameAsString();
+            byte[] startRowkey = regionInfo.getStartKey();
+            byte[] endRowkey= regionInfo.getEndKey();
+
+
+            System.out.print("regionName:"+regionName+"\n");
+            Scan sc = new Scan();
+
+            sc.setBatch(1);
+            sc.setStartRow(startRowkey);
+            try {
+                scanner =demo.getTable().getScanner(sc);
+
+                int i=0;
+                while ((r = scanner.next())!=null)
+                {
+
+                    System.out.print("rowKey"+i+":"+r.toString()+"\n");
+                    i++;
+                }
+
+
+
+                scanner.close();
+
+
