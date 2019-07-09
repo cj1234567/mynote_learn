@@ -458,7 +458,82 @@ SSTable 是可以启用压缩功能的，并且这种压缩不是将整个 SSTab
 
 阿里为了优化这个问题，在X-DB引入了异构硬件设备FPGA来代替CPU完成compaction操作，使系统整体性能维持在高水位并避免抖动，是存储引擎得以服务业务苛刻要求的关键。
 
+# 3.集群规划
 
+## 3.1 集群业务规划
+- 硬盘容量敏感型业务
+
+	这类业务对读写延迟以及吞吐量都没有很大的要求，唯一的需要就是硬盘容量。比如大多数离线读写分析业务，上层应用一般每隔一段时间批量写入大量数据，然后读取也是定期批量读取大量数据。特点：离线写、离线读，需求硬盘容量
+
+- 带宽敏感型业务
+
+	这类业务大多数写入吞吐量很大，但对读取吞吐量没有什么要求。比如日志实时存储业务，上层应用通过kafka将海量日志实时传输过来，要求能够实时写入，而读取场景一般是离线分析或者在上次业务遇到异常的时候对日志进行检索。特点：在线写、离线读，需求带宽
+- IO敏感型业务
+
+	相比前面两类业务来说，IO敏感型业务一般都是较为核心的业务。这类业务对读写延迟要求较高，尤其对于读取延迟通常在100ms以内，部分业务可能要求更高。比如在线消息存储系统、历史订单系统、实时推荐系统等。特点：在（离）线写、在线读，需求内存、高IOPS介质
+## 3.2 集群容量规划
+
+每个季度公司都会要求采购新机器，一般情况下机器的规格（硬盘总容量、内存大小、CPU规格）都是固定的。假如现在一台RegionServer的硬盘规格是3.6T * 12，总内存大小为128G，从理论上来说这样的配置是否会有资源浪费？如果有的话是硬盘浪费还是内存浪费？那合理的硬盘/内存搭配应该是什么样？和哪些影响因素有关？
+
+
+这里需要提出一个’Disk / Java Heap Ratio’的概念，意思是说一台RegionServer上1bytes的Java内存大小需要搭配多大的硬盘大小最合理。在给出合理的解释在前，先把结果给出来：
+
+
+Disk Size / Java Heap = RegionSize / MemstoreSize * ReplicationFactor * HeapFractionForMemstore * 2
+
+
+按照默认配置，RegionSize = 10G，对应参数为hbase.hregion.max.filesize；MemstoreSize = 128M，对应参数为hbase.hregion.memstore.flush.size；ReplicationFactor = 3，对应参数为dfs.replication；HeapFractionForMemstore = 0.4，对应参数为hbase.regionserver.global.memstore.lowerLimit；
+
+
+计算为：10G / 128M * 3 * 0.4 * 2 = 192，意思是说RegionServer上1bytes的Java内存大小需要搭配192bytes的硬盘大小最合理，再回到之前给出的问题，128G的内存总大小，拿出96G作为Java内存用于RegionServer，那对应需要搭配96G ＊ 192 = 18T硬盘容量，而实际采购机器配置的是36T，说明在默认配置条件下会有几乎一半硬盘被浪费。
+
+计算公式是如何’冒’出来的？
+再回过头来看看那个计算公式是怎么’冒’出来的，其实很简单，只需要从硬盘容量纬度和Java Heap纬度两方面计算Region个数，再令两者相等就可以推导出来，如下：
+
+
+硬盘容量纬度下Region个数：Disk Size / (RegionSize ＊ReplicationFactor) 
+
+Java Heap纬度下Region个数：Java Heap * HeapFractionForMemstore / (MemstoreSize / 2 ) 
+
+
+Disk Size / (RegionSize ＊ReplicationFactor)  ＝ Java Heap * HeapFractionForMemstore / (MemstoreSize / 2 ) 
+
+
+＝> Disk Size / Java Heap = RegionSize / MemstoreSize * ReplicationFactor * HeapFractionForMemstore * 2
+
+
+这样的公式有什么具体意义？
+
+1. 最直观的意义就是判断在当前给定配置下是否会有资源浪费，内存资源和硬盘资源是否匹配。
+
+2. 那反过来，如果已经给定了硬件资源，比如硬件采购部已经采购了当前机器内存128G，分配给Java Heap为96G，而硬盘是40T，很显然两者是不匹配的，那能不能通过修改HBase配置来使得两者匹配？当然可以，可以通过增大RegionSize或者减少MemstoreSize来实现，比如将默认的RegionSize由10G增大到20G，此时Disk Size / Java Heap ＝ 384，96G * 384 = 36T，基本就可以使得硬盘和内存达到匹配。
+
+3. 另外，如果给定配置下内存硬盘不匹配，那实际场景下内存’浪费’好呢还是硬盘’浪费’好？答案是内存’浪费’好，比如采购的机器Java Heap可以分配到126G，而总硬盘容量只有18T，默认配置下必然是Java Heap有浪费，但是可以通过修改HBase配置将多余的内存资源分配给HBase读缓存BlockCache，这样就可以保证Java Heap并没有实际浪费。
+
+另外，还有这些资源需要注意…
+带宽资源：因为HBase在大量scan以及高吞吐量写入的时候特别耗费网络带宽资源，强烈建议HBase集群部署在万兆交换机机房，单台机器最好也是万兆网卡＋bond。如果特殊情况交换机是千兆网卡，一定要保证所有的RegionServer机器部署在同一个交换机下，跨交换机会导致写入延迟很大，严重影响业务写入性能。
+
+ CPU资源：HBase是一个CPU敏感型业务，无论数据写入读取，都会因为大量的压缩解压操作，特别耗费计算资源。因此对于HBase来说，CPU越多越好。
+## 3.3 Region规划
+Region规划主要涉及到两个方面：Region个数规划以及单Region大小规划，这两个方面并不独立，而是相互关联的，大Region对应的Region个数少，小Region对应的Region个数多。Region规划相信是很多HBase运维同学比较关心的问题，一个给定规格的RegionServer上运行多少Region比较合适，在刚开始接触HBase的时候，这个问题也一直困扰着笔者。在实际应用中，Region太多或者太少都有一定的利弊：
+
+
+![tool-manager](../../读书笔记/assets/hbase/集群规划1.png)
+
+
+可以看出来，在HBase当前工作模式下，Region太多或者太少都不是一件太好的事情，在实际线上环境需要选择一个折中点。官方文档给出的一个推荐范围在20～200之间，而单个Region大小控制在10G~30G，比较符合实际情况。
+
+
+然而，HBase并不能直接配置一台RegionServer上的Region数，Region数最直接取决于RegionSize的大小配置hbase.hregion.max.filesize，HBase认为，一旦某个Region的大小大于配置值，就会进行分裂。
+
+
+hbase.hregion.max.filesize默认为10G，如果一台RegionServer预期运行100个Region，那单台RegionServer上数据量预估值就为：10G * 100 * 3 = 3T。反过来想，如果一台RegionServer上想存储12T数据量，那按照单Region为10G计算，就会分裂出400个Region，很显然不合理。此时就需要调整参数hbase.hregion.max.filesize，将此值适度调大，调整为20G或者30G。而实际上当下单台物理机所能配置的硬盘越来越大，比如36T已经很普遍，如果想把所有容量都用来存储数据，依然假设一台RegionServer上分布100个Region，那么每个Region的大小将会达到可怕的120G，一旦执行Compaction将会是一个灾难。
+
+
+可见，对于当下的HBase，如果想让HBase工作的更加平稳（Region个数控制在20～200之间，单Region大小控制在10G~30G之间），最多可以存储的数据量差不多为200 * 30G ＊ 3＝ 18T。如果存储的数据量超过18T，必然会引起或多或少的性能问题。所以说，从Region规模这个角度讲，当前单台RegionServer能够合理利用起来的硬盘容量上限基本为18T。
+
+
+然而随着硬件成本的不断下降，单台RegionServer可以轻松配置40T＋的硬盘容量，如果按照上述说法，越来越多的硬盘其实只是’镜中月，水中花’。社区也意识到了这样的问题，在当前Region的概念下提出了Sub-Region的概念，可以简单理解为将当前的Region切分为很多逻辑上小的Sub-Region。Region还是以前的Region，只是所有之前以Region为单位进行的Compaction将会以更小的Sub-Region粒度执行。这样，单Region就可以配置的很大，比如50G、100G，此时单台RegionServer上也就可以存储更多的数据。个人认为Sub-Region功能将会是HBase开发的一个重点。
 
 # 4.优化
 
